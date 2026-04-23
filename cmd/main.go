@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/jsndz/redish/util"
 )
 
 func handler(conn net.Conn) {
@@ -15,14 +18,40 @@ func handler(conn net.Conn) {
 			fmt.Println("connection closed")
 			return
 		}
-		msg := strings.TrimSpace(string(buf[:n]))
-		fmt.Println("received:", msg)
+		val, _ := util.RESPFormatter(string(buf[:n]))
 
-		switch msg {
+		arr, ok := val.([]interface{})
+		if !ok || len(arr) == 0 {
+			conn.Write([]byte("-ERR invalid request\r\n"))
+			return
+		}
+
+		cmd, ok := arr[0].(string)
+		if !ok {
+			conn.Write([]byte("-ERR invalid command\r\n"))
+			return
+		}
+
+		switch strings.ToUpper(cmd) {
+
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
+
+		case "ECHO":
+			if len(arr) < 2 {
+				conn.Write([]byte("-ERR wrong number of arguments\r\n"))
+				return
+			}
+			msg, ok := arr[1].(string)
+			if !ok {
+				conn.Write([]byte("-ERR invalid argument\r\n"))
+				return
+			}
+			resp := "$" + strconv.Itoa(len(msg)) + "\r\n" + msg + "\r\n"
+			conn.Write([]byte(resp))
+
 		default:
-			fmt.Println("Unknown Command")
+			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
 	}
 }
