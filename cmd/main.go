@@ -6,12 +6,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jsndz/redish/util"
 )
 
-func handler(conn net.Conn) {
+func handler(conn net.Conn, MAP map[string]string) {
 	buf := make([]byte, 1024)
+	var mu sync.Mutex
+
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
@@ -49,7 +52,23 @@ func handler(conn net.Conn) {
 			}
 			resp := "$" + strconv.Itoa(len(msg)) + "\r\n" + msg + "\r\n"
 			conn.Write([]byte(resp))
+		case "SET":
+			mu.Lock()
+			MAP[arr[1].(string)] = arr[2].(string)
+			mu.Unlock()
+			resp := "+OK\r\n"
+			conn.Write([]byte(resp))
+		case "GET":
+			mu.Lock()
+			data, ok := MAP[arr[1].(string)]
+			mu.Unlock()
+			if !ok {
+				conn.Write([]byte("$-1\r\n"))
+				return
+			}
+			resp := "$" + strconv.Itoa(len(data)) + "\r\n" + data + "\r\n"
 
+			conn.Write([]byte(resp))
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
