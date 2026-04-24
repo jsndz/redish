@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jsndz/redish/util"
 )
@@ -53,9 +54,24 @@ func handler(conn net.Conn, MAP map[string]string) {
 			resp := "$" + strconv.Itoa(len(msg)) + "\r\n" + msg + "\r\n"
 			conn.Write([]byte(resp))
 		case "SET":
+
 			mu.Lock()
 			MAP[arr[1].(string)] = arr[2].(string)
 			mu.Unlock()
+			if len(arr) == 5 {
+				var timer time.Duration
+				if strings.ToUpper(arr[3].(string)) == "EX" {
+					ex, _ := strconv.Atoi(arr[4].(string))
+					timer = time.Duration(ex) * time.Second
+				}
+				if strings.ToUpper(arr[3].(string)) == "PX" {
+					px, _ := strconv.Atoi(arr[4].(string))
+					timer = time.Duration(px) * time.Millisecond
+				}
+				time.AfterFunc(timer, func() {
+					delete(MAP, arr[1].(string))
+				})
+			}
 			resp := "+OK\r\n"
 			conn.Write([]byte(resp))
 		case "GET":
@@ -74,7 +90,6 @@ func handler(conn net.Conn, MAP map[string]string) {
 		}
 	}
 }
-
 func main() {
 	// binds program to network address and listen
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -83,13 +98,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer l.Close()
-
+	MAP := make(map[string]string)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			fmt.Println("Failed to accpet 6379")
+			fmt.Println("Failed to accept connection on 6379")
 			os.Exit(1)
 		}
-		go handler(conn)
+		go handler(conn, MAP)
 	}
 }
