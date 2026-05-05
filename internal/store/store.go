@@ -1,8 +1,16 @@
 package store
 
 import (
+	"fmt"
 	"sync"
 	"time"
+)
+
+type kind string
+
+const (
+	list kind = "list"
+	str  kind = "string"
 )
 
 type Store struct {
@@ -11,8 +19,10 @@ type Store struct {
 }
 
 type entry struct {
-	value string
-	timer *time.Timer
+	kind      kind
+	value     string
+	listValue []string
+	timer     *time.Timer
 }
 
 func New() *Store {
@@ -24,12 +34,18 @@ func New() *Store {
 func (s *Store) Set(key, value string, ttl time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	existing, ok := s.data[key]
+	if ok {
+		if existing.kind != str {
+			return
+		}
+		if existing.timer != nil {
+			existing.timer.Stop()
+		}
 
-	if existing, ok := s.data[key]; ok && existing.timer != nil {
-		existing.timer.Stop()
 	}
 
-	item := &entry{value: value}
+	item := &entry{kind: str, value: value}
 	s.data[key] = item
 
 	if ttl > 0 {
@@ -60,4 +76,20 @@ func (s *Store) Delete(key string) {
 		item.timer.Stop()
 	}
 	delete(s.data, key)
+}
+
+func (s *Store) Rpush(key string, values ...string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.data[key]
+	if ok {
+		if item.kind != list {
+			return 0, fmt.Errorf("wrong type")
+		}
+	} else {
+		item = &entry{kind: list, listValue: []string{}}
+		s.data[key] = item
+	}
+	item.listValue = append(item.listValue, values...)
+	return len(item.listValue), nil
 }

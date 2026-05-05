@@ -8,6 +8,7 @@ import (
 	"github.com/jsndz/redish/internal/commands/echo"
 	"github.com/jsndz/redish/internal/commands/get"
 	"github.com/jsndz/redish/internal/commands/ping"
+	"github.com/jsndz/redish/internal/commands/rpush"
 	"github.com/jsndz/redish/internal/commands/set"
 	"github.com/jsndz/redish/internal/store"
 )
@@ -27,6 +28,8 @@ func Dispatch(conn net.Conn, arr []interface{}, st *store.Store) error {
 		return set.Execute(conn, arr[1:], st)
 	case "GET":
 		return get.Execute(conn, arr[1:], st)
+	case "RPUSH":
+		return rpush.Execute(conn, arr[1:], st)
 	default:
 		return errors.New("-ERR unknown command\r\n")
 	}
