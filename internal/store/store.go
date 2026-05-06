@@ -93,3 +93,41 @@ func (s *Store) Rpush(key string, values ...string) (int, error) {
 	item.listValue = append(item.listValue, values...)
 	return len(item.listValue), nil
 }
+
+func (s *Store) Lrange(key string, start, end int) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	item, ok := s.data[key]
+	if !ok {
+		return nil, fmt.Errorf("key doesn't exist")
+	}
+	if item.kind != list {
+		return nil, fmt.Errorf("wrong type")
+	}
+	length := len(item.listValue)
+
+	if start < 0 {
+		start = length + start
+	}
+
+	if end < 0 {
+		end = length + end
+	}
+
+	if start < 0 {
+		start = 0
+	}
+
+	if end >= length {
+		end = length - 1
+	}
+
+	if start >= length || start > end {
+		return []string{}, nil
+	}
+	values := []string{}
+	for i := start; i < end; i++ {
+		values = append(values, item.listValue[i])
+	}
+	return values, nil
+}
