@@ -1,7 +1,7 @@
 package lrange
 
 import (
-	"bufio"
+	"io"
 	"net"
 	"testing"
 
@@ -12,25 +12,36 @@ func TestLrangeExecute(t *testing.T) {
 	s := store.New()
 	s.Rpush("mylist", "one", "two", "three", "four", "five")
 
-	t.Run("lrange with valid args", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
-		defer server.Close()
-		key := "test_lrange"
-		go func() {
-			err := Execute(server, []interface{}{key, 1, 2}, s)
-			if err != nil {
-				t.Errorf("Execute returned error: %v", err)
-			}
-			server.Close()
-		}()
-		reader := bufio.NewReader(client)
-		response, _ := reader.ReadString('\n')
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
 
-		expected := "*2\r\n$1\r\none\r\n$1\r\ntwo\r\n"
+	go func() {
+		err := Execute(
+			server,
+			[]interface{}{"mylist", "1", "2"},
+			s,
+		)
 
-		if response != expected {
-			t.Errorf("Expected %q, got %q", expected, response)
+		if err != nil {
+			t.Errorf("Execute returned error: %v", err)
 		}
-	})
+
+		server.Close()
+	}()
+
+	response, err := io.ReadAll(client)
+	if err != nil {
+		t.Fatalf("failed to read response: %v", err)
+	}
+
+	expected := "*2\r\n$3\r\ntwo\r\n$5\r\nthree\r\n"
+
+	if string(response) != expected {
+		t.Errorf(
+			"expected %q, got %q",
+			expected,
+			string(response),
+		)
+	}
 }
