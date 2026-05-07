@@ -1,0 +1,26 @@
+package incr
+
+import (
+	"errors"
+	"fmt"
+	"net"
+
+	"github.com/jsndz/redish/internal/store"
+)
+
+func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
+	if len(args) != 1 {
+		return errors.New("-ERR invalid number of arguments")
+	}
+
+	key, ok := args[0].(string)
+	if !ok {
+		return errors.New("-ERR invalid type of key")
+	}
+	val, err := st.Incr(key)
+	if err != nil {
+		return errors.New("-ERR Could not increment value: " + err.Error())
+	}
+	_, err = conn.Write([]byte(fmt.Sprintf(":%d\r\n", val)))
+	return err
+}

@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -133,4 +134,21 @@ func (s *Store) Lrange(key string, start, end int) ([]string, error) {
 		values = append(values, item.listValue[i])
 	}
 	return values, nil
+}
+
+func (s *Store) Incr(key string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	val, ok := s.data[key]
+	if !ok {
+		s.data[key] = &entry{kind: str, value: "1"}
+		return 1, nil
+	}
+	intVal, err := strconv.Atoi(val.value)
+	if err != nil {
+		return 0, fmt.Errorf("value is not a number")
+	}
+	intVal++
+	s.data[key].value = strconv.Itoa(intVal)
+	return intVal, nil
 }
