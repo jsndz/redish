@@ -72,6 +72,13 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store) ([]byte, err
 			}
 		}
 		return res, nil
+	case "DISCARD":
+		if !c.InTx {
+			return nil, errors.New("-ERR DISCARD without MULTI")
+		}
+		c.InTx = false
+		c.TxQueue = nil
+		return []byte("+OK\r\n"), nil
 	default:
 		return nil, errors.New("-ERR unknown command\r\n")
 	}

@@ -52,4 +52,38 @@ func TestDispatch(t *testing.T) {
 			t.Error("Expected client NOT to be in transaction")
 		}
 	})
+	t.Run("Dispatch DISCARD WITH MULTI", func(t *testing.T) {
+		res, _ := Dispatch(c, []interface{}{"MULTI"}, s)
+		if string(res) != "+OK\r\n" {
+			t.Errorf("Expected +OK for MULTI, got %q", string(res))
+		}
+		if !c.InTx {
+			t.Error("Expected client to be in transaction")
+		}
+
+		res, _ = Dispatch(c, []interface{}{"SET", "k1", "v1"}, s)
+		if string(res) != "+QUEUED\r\n" {
+			t.Errorf("Expected +QUEUED, got %q", string(res))
+		}
+
+		res, _ = Dispatch(c, []interface{}{"GET", "k1"}, s)
+		if string(res) != "+QUEUED\r\n" {
+			t.Errorf("Expected +QUEUED, got %q", string(res))
+		}
+		res, _ = Dispatch(c, []interface{}{"DISCARD"}, s)
+		expected := "+OK\r\n"
+		if string(res) != expected {
+			t.Errorf("Expected %q, got %q", expected, string(res))
+		}
+		if c.InTx {
+			t.Error("Expected client NOT to be in transaction")
+		}
+	})
+	t.Run("Dispatch DISCARD WITHOUT MULTI", func(t *testing.T) {
+
+		_, err := Dispatch(c, []interface{}{"DISCARD"}, s)
+		if err == nil {
+			t.Error("Expected err")
+		}
+	})
 }
