@@ -7,16 +7,18 @@ type Command struct {
 	Args []interface{}
 }
 type Client struct {
-	Conn    net.Conn
-	InTx    bool
-	TxQueue []Command
+	Conn        net.Conn
+	InTx        bool
+	TxQueue     []Command
+	WatchedKeys map[string]bool
 }
 
 func New(conn net.Conn) *Client {
 	return &Client{
-		Conn:    conn,
-		InTx:    false,
-		TxQueue: make([]Command, 0),
+		Conn:        conn,
+		InTx:        false,
+		TxQueue:     make([]Command, 0),
+		WatchedKeys: make(map[string]bool),
 	}
 }
 

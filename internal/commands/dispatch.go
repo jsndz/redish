@@ -2,11 +2,12 @@ package commands
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/jsndz/redish/internal/client"
+	"github.com/jsndz/redish/internal/commands/discard"
 	"github.com/jsndz/redish/internal/commands/echo"
+	"github.com/jsndz/redish/internal/commands/exec"
 	"github.com/jsndz/redish/internal/commands/get"
 	"github.com/jsndz/redish/internal/commands/incr"
 	"github.com/jsndz/redish/internal/commands/lrange"
@@ -55,29 +56,10 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store) ([]byte, err
 		c.InTx = true
 		return multi.Execute(cmd.Args, st)
 	case "EXEC":
-		if !c.InTx {
-			return nil, errors.New("-ERR EXEC without MULTI\r\n")
-		}
-		queue := c.TxQueue
-		c.InTx = false
-		c.TxQueue = nil
-		res := []byte(fmt.Sprintf("*%d\r\n", len(queue)))
-		for _, qCmd := range queue {
-			qArr := append([]interface{}{qCmd.Name}, qCmd.Args...)
-			qRes, err := Dispatch(c, qArr, st)
-			if err != nil {
-				res = append(res, []byte(err.Error())...)
-			} else {
-				res = append(res, qRes...)
-			}
-		}
-		return res, nil
+		return exec.Execute(c, cmd.Args, st, Dispatch)
 	case "DISCARD":
-		if !c.InTx {
-			return nil, errors.New("-ERR DISCARD without MULTI")
-		}
-		c.InTx = false
-		c.TxQueue = nil
+		return discard.Execute(c, cmd.Args)
+	case "WATCH":
 		return []byte("+OK\r\n"), nil
 	default:
 		return nil, errors.New("-ERR unknown command\r\n")

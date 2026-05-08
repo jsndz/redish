@@ -86,4 +86,32 @@ func TestDispatch(t *testing.T) {
 			t.Error("Expected err")
 		}
 	})
+	t.Run("EXEC does not rollback on command error", func(t *testing.T) {
+		res, _ := Dispatch(c, []interface{}{"MULTI"}, s)
+
+		if string(res) != "+OK\r\n" {
+			t.Fatalf("expected +OK, got %q", string(res))
+		}
+
+		Dispatch(c, []interface{}{"SET", "foo", "bar"}, s)
+
+		Dispatch(c, []interface{}{"GET"}, s)
+
+		res, _ = Dispatch(c, []interface{}{"EXEC"}, s)
+
+		expected := "*2\r\n+OK\r\n-ERR wrong number of arguments\r\n"
+
+		if string(res) != expected {
+			t.Errorf("expected %q, got %q", expected, string(res))
+		}
+
+		res, err := Dispatch(c, []interface{}{"GET", "foo"}, s)
+		if err != nil {
+			t.Fatalf("GET failed: %v", err)
+		}
+
+		if string(res) != "$3\r\nbar\r\n" {
+			t.Errorf("expected value to persist, got %q", string(res))
+		}
+	})
 }

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/jsndz/redish/internal/client"
 )
 
 type kind string
@@ -20,10 +22,11 @@ type Store struct {
 }
 
 type entry struct {
-	kind      kind
-	value     string
-	listValue []string
-	timer     *time.Timer
+	kind           kind
+	value          string
+	listValue      []string
+	timer          *time.Timer
+	wacthedClients map[*client.Client]bool
 }
 
 func New() *Store {
@@ -151,4 +154,18 @@ func (s *Store) Incr(key string) (int, error) {
 	intVal++
 	s.data[key].value = strconv.Itoa(intVal)
 	return intVal, nil
+}
+
+func (s *Store) AddWatcher(key string, c *client.Client) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	val, ok := s.data[key]
+	if !ok {
+		return fmt.Errorf("key doesn't exist")
+	}
+	if val.wacthedClients == nil {
+		val.wacthedClients = make(map[*client.Client]bool)
+	}
+	val.wacthedClients[c] = true
+	return nil
 }
