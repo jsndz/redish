@@ -28,8 +28,10 @@ func handler(c *client.Client, st *store.Store) {
 			continue
 		}
 
-		if err := commands.Dispatch(c, arr, st); err != nil {
+		if data, err := commands.Dispatch(c, arr, st); err != nil {
 			c.Write([]byte(err.Error()))
+		} else {
+			c.Write(data)
 		}
 	}
 }

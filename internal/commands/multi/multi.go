@@ -3,15 +3,12 @@ package multi
 import (
 	"errors"
 
-	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Execute(c *client.Client, args []interface{}, st *store.Store) error {
+func Execute(args []interface{}, st *store.Store) ([]byte, error) {
 	if len(args) != 0 {
-		return errors.New("-ERR no args are supported")
+		return nil, errors.New("-ERR no args are supported")
 	}
-	c.InTx = true
-	_, err := c.Write([]byte("+OK\r\n"))
-	return err
+	return []byte("+OK\r\n"), nil
 }

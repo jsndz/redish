@@ -2,17 +2,21 @@ package client
 
 import "net"
 
+type Command struct {
+	Name string
+	Args []interface{}
+}
 type Client struct {
 	Conn    net.Conn
 	InTx    bool
-	TxQueue [][]interface{}
+	TxQueue []Command
 }
 
 func New(conn net.Conn) *Client {
 	return &Client{
 		Conn:    conn,
 		InTx:    false,
-		TxQueue: make([][]interface{}, 0),
+		TxQueue: make([]Command, 0),
 	}
 }
 

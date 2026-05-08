@@ -6,40 +6,39 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Execute(c *client.Client, args []interface{}, st *store.Store) error {
+func Execute(args []interface{}, st *store.Store) ([]byte, error) {
 	if len(args) != 2 && len(args) != 4 {
-		return errors.New("-ERR wrong number of arguments\r\n")
+		return nil, errors.New("-ERR wrong number of arguments\r\n")
 	}
 
 	key, ok := args[0].(string)
 	if !ok {
-		return errors.New("-ERR invalid key\r\n")
+		return nil, errors.New("-ERR invalid key\r\n")
 	}
 
 	value, ok := args[1].(string)
 	if !ok {
-		return errors.New("-ERR invalid value\r\n")
+		return nil, errors.New("-ERR invalid value\r\n")
 	}
 
 	var ttl time.Duration
 	if len(args) == 4 {
 		op, ok := args[2].(string)
 		if !ok {
-			return errors.New("-ERR invalid expiration option\r\n")
+			return nil, errors.New("-ERR invalid expiration option\r\n")
 		}
 
 		exp, ok := args[3].(string)
 		if !ok {
-			return errors.New("-ERR invalid expiration value\r\n")
+			return nil, errors.New("-ERR invalid expiration value\r\n")
 		}
 
 		parsed, err := strconv.Atoi(exp)
 		if err != nil {
-			return errors.New("-ERR invalid expiration value\r\n")
+			return nil, errors.New("-ERR invalid expiration value\r\n")
 		}
 
 		switch strings.ToUpper(op) {
@@ -48,11 +47,10 @@ func Execute(c *client.Client, args []interface{}, st *store.Store) error {
 		case "PX":
 			ttl = time.Duration(parsed) * time.Millisecond
 		default:
-			return errors.New("-ERR syntax error\r\n")
+			return nil, errors.New("-ERR syntax error\r\n")
 		}
 	}
 
 	st.Set(key, value, ttl)
-	_, err := c.Write([]byte("+OK\r\n"))
-	return err
+	return []byte("+OK\r\n"), nil
 }

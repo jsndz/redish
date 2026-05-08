@@ -1,12 +1,9 @@
 package set
 
 import (
-	"bufio"
-	"net"
 	"testing"
 	"time"
 
-	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
@@ -14,30 +11,16 @@ func TestSetExecute(t *testing.T) {
 	s := store.New()
 
 	t.Run("set valid arguments", func(t *testing.T) {
-		cli, server := net.Pipe()
-		defer cli.Close()
-		defer server.Close()
-
 		key := "foo"
 		value := "bar"
-		go func() {
-			c := client.New(server)
-			err := Execute(c, []interface{}{key, value}, s)
-			if err != nil {
-				t.Errorf("Execute returned error: %v", err)
-			}
-			server.Close()
-		}()
-
-		reader := bufio.NewReader(cli)
-		response, err := reader.ReadString('\n')
+		response, err := Execute([]interface{}{key, value}, s)
 		if err != nil {
-			t.Fatalf("Failed to read response: %v", err)
+			t.Errorf("Execute returned error: %v", err)
 		}
 
 		expected := "+OK\r\n"
-		if response != expected {
-			t.Errorf("Expected %q, got %q", expected, response)
+		if string(response) != expected {
+			t.Errorf("Expected %q, got %q", expected, string(response))
 		}
 
 		got, ok := s.Get(key)
@@ -47,23 +30,17 @@ func TestSetExecute(t *testing.T) {
 	})
 
 	t.Run("set with EX expiration", func(t *testing.T) {
-		cli, server := net.Pipe()
-		defer cli.Close()
-		defer server.Close()
-
 		key := "ex_key"
 		value := "ex_val"
-		go func() {
-			c := client.New(server)
-			err := Execute(c, []interface{}{key, value, "EX", "1"}, s)
-			if err != nil {
-				t.Errorf("Execute returned error: %v", err)
-			}
-			server.Close()
-		}()
+		response, err := Execute([]interface{}{key, value, "EX", "1"}, s)
+		if err != nil {
+			t.Errorf("Execute returned error: %v", err)
+		}
 
-		reader := bufio.NewReader(cli)
-		reader.ReadString('\n') // Consume +OK
+		expected := "+OK\r\n"
+		if string(response) != expected {
+			t.Errorf("Expected %q, got %q", expected, string(response))
+		}
 
 		got, ok := s.Get(key)
 		if !ok || got != value {
@@ -78,17 +55,12 @@ func TestSetExecute(t *testing.T) {
 	})
 
 	t.Run("set wrong number of arguments", func(t *testing.T) {
-		cli, server := net.Pipe()
-		defer cli.Close()
-		defer server.Close()
-
-		c := client.New(server)
-		err := Execute(c, []interface{}{"key"}, s)
+		_, err := Execute([]interface{}{"key"}, s)
 		if err == nil {
 			t.Error("Expected error for 1 argument, got nil")
 		}
 
-		err = Execute(c, []interface{}{"key", "val", "EX"}, s)
+		_, err = Execute([]interface{}{"key", "val", "EX"}, s)
 		if err == nil {
 			t.Error("Expected error for 3 arguments, got nil")
 		}
