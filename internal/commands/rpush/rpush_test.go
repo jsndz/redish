@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
@@ -12,21 +13,22 @@ func TestRpushExecute(t *testing.T) {
 	s := store.New()
 
 	t.Run("rpush single value", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
 		key := "mylist"
 		value := "v1"
 		go func() {
-			err := Execute(server, []interface{}{key, value}, s)
+			c := client.New(server)
+			err := Execute(c, []interface{}{key, value}, s)
 			if err != nil {
 				t.Errorf("Execute returned error: %v", err)
 			}
 			server.Close()
 		}()
 
-		reader := bufio.NewReader(client)
+		reader := bufio.NewReader(cli)
 		response, _ := reader.ReadString('\n')
 
 		expected := ":1\r\n"
@@ -36,20 +38,21 @@ func TestRpushExecute(t *testing.T) {
 	})
 
 	t.Run("rpush multiple values", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
 		key := "mylist"
 		go func() {
-			err := Execute(server, []interface{}{key, "v2", "v3"}, s)
+			c := client.New(server)
+			err := Execute(c, []interface{}{key, "v2", "v3"}, s)
 			if err != nil {
 				t.Errorf("Execute returned error: %v", err)
 			}
 			server.Close()
 		}()
 
-		reader := bufio.NewReader(client)
+		reader := bufio.NewReader(cli)
 		response, _ := reader.ReadString('\n')
 
 		expected := ":3\r\n" // Previous 1 + 2 new ones

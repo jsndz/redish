@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
@@ -12,19 +13,20 @@ func TestPingExecute(t *testing.T) {
 	s := store.New()
 	
 	t.Run("ping with no arguments", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
 		go func() {
-			err := Execute(server, []interface{}{}, s)
+			c := client.New(server)
+			err := Execute(c, []interface{}{}, s)
 			if err != nil {
 				t.Errorf("Execute returned error: %v", err)
 			}
 			server.Close()
 		}()
 
-		reader := bufio.NewReader(client)
+		reader := bufio.NewReader(cli)
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			t.Fatalf("Failed to read response: %v", err)
@@ -37,11 +39,12 @@ func TestPingExecute(t *testing.T) {
 	})
 
 	t.Run("ping with arguments", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
-		err := Execute(server, []interface{}{"extra"}, s)
+		c := client.New(server)
+		err := Execute(c, []interface{}{"extra"}, s)
 		if err == nil {
 			t.Error("Expected error for wrong number of arguments, got nil")
 		}

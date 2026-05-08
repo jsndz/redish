@@ -2,15 +2,15 @@ package set
 
 import (
 	"errors"
-	"net"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
+func Execute(c *client.Client, args []interface{}, st *store.Store) error {
 	if len(args) != 2 && len(args) != 4 {
 		return errors.New("-ERR wrong number of arguments\r\n")
 	}
@@ -53,6 +53,6 @@ func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
 	}
 
 	st.Set(key, value, ttl)
-	_, err := conn.Write([]byte("+OK\r\n"))
+	_, err := c.Write([]byte("+OK\r\n"))
 	return err
 }

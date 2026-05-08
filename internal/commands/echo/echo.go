@@ -3,12 +3,12 @@ package echo
 import (
 	"errors"
 	"fmt"
-	"net"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Execute(conn net.Conn, args []interface{}, _ *store.Store) error {
+func Execute(c *client.Client, args []interface{}, _ *store.Store) error {
 	if len(args) != 1 {
 		return errors.New("-ERR wrong number of arguments\r\n")
 	}
@@ -18,6 +18,6 @@ func Execute(conn net.Conn, args []interface{}, _ *store.Store) error {
 		return errors.New("-ERR invalid argument\r\n")
 	}
 
-	_, err := conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), msg)))
+	_, err := c.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(msg), msg)))
 	return err
 }

@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
@@ -16,19 +17,20 @@ func TestGetExecute(t *testing.T) {
 		value := "bar"
 		s.Set(key, value, 0)
 
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
 		go func() {
-			err := Execute(server, []interface{}{key}, s)
+			c := client.New(server)
+			err := Execute(c, []interface{}{key}, s)
 			if err != nil {
 				t.Errorf("Execute returned error: %v", err)
 			}
 			server.Close()
 		}()
 
-		reader := bufio.NewReader(client)
+		reader := bufio.NewReader(cli)
 		header, _ := reader.ReadString('\n')
 		content, _ := reader.ReadString('\n')
 
@@ -40,19 +42,20 @@ func TestGetExecute(t *testing.T) {
 	})
 
 	t.Run("get non-existing key", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
 		go func() {
-			err := Execute(server, []interface{}{"nonexistent"}, s)
+			c := client.New(server)
+			err := Execute(c, []interface{}{"nonexistent"}, s)
 			if err != nil {
 				t.Errorf("Execute returned error: %v", err)
 			}
 			server.Close()
 		}()
 
-		reader := bufio.NewReader(client)
+		reader := bufio.NewReader(cli)
 		response, _ := reader.ReadString('\n')
 
 		expected := "$-1\r\n"

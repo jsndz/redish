@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
@@ -12,13 +13,14 @@ func TestLrangeExecute(t *testing.T) {
 	s := store.New()
 	s.Rpush("mylist", "one", "two", "three", "four", "five")
 
-	client, server := net.Pipe()
-	defer client.Close()
+	cli, server := net.Pipe()
+	defer cli.Close()
 	defer server.Close()
 
 	go func() {
+		c := client.New(server)
 		err := Execute(
-			server,
+			c,
 			[]interface{}{"mylist", "1", "2"},
 			s,
 		)
@@ -30,7 +32,7 @@ func TestLrangeExecute(t *testing.T) {
 		server.Close()
 	}()
 
-	response, err := io.ReadAll(client)
+	response, err := io.ReadAll(cli)
 	if err != nil {
 		t.Fatalf("failed to read response: %v", err)
 	}

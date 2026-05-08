@@ -3,13 +3,13 @@ package lrange
 import (
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
+func Execute(c *client.Client, args []interface{}, st *store.Store) error {
 	if len(args) < 2 {
 		return errors.New("-ERR invalid number of args")
 	}
@@ -45,12 +45,12 @@ func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
 	if err != nil {
 		return err
 	}
-	_, err = conn.Write([]byte(fmt.Sprintf("*%d\r\n", len(values))))
+	_, err = c.Write([]byte(fmt.Sprintf("*%d\r\n", len(values))))
 	if err != nil {
 		return err
 	}
 	for _, v := range values {
-		_, err = conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)))
+		_, err = c.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(v), v)))
 		if err != nil {
 			return err
 		}

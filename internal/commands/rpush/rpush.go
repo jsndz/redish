@@ -3,12 +3,12 @@ package rpush
 import (
 	"errors"
 	"fmt"
-	"net"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
+func Execute(c *client.Client, args []interface{}, st *store.Store) error {
 	if len(args) < 2 {
 		return errors.New("-ERR wrong number of arguments\r\n")
 	}
@@ -31,7 +31,7 @@ func Execute(conn net.Conn, args []interface{}, st *store.Store) error {
 	if err != nil {
 		return err
 	}
-	_, err = conn.Write([]byte(fmt.Sprintf(":%d\r\n", l)))
+	_, err = c.Write([]byte(fmt.Sprintf(":%d\r\n", l)))
 
 	return err
 }

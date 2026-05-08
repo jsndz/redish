@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/store"
 )
 
@@ -12,20 +13,21 @@ func TestEchoExecute(t *testing.T) {
 	s := store.New()
 
 	t.Run("echo valid argument", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
 		msg := "hello"
 		go func() {
-			err := Execute(server, []interface{}{msg}, s)
+			c := client.New(server)
+			err := Execute(c, []interface{}{msg}, s)
 			if err != nil {
 				t.Errorf("Execute returned error: %v", err)
 			}
 			server.Close()
 		}()
 
-		reader := bufio.NewReader(client)
+		reader := bufio.NewReader(cli)
 		response, err := reader.ReadString('\n') // $5
 		if err != nil {
 			t.Fatalf("Failed to read response header: %v", err)
@@ -47,27 +49,29 @@ func TestEchoExecute(t *testing.T) {
 	})
 
 	t.Run("echo wrong number of arguments", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
-		err := Execute(server, []interface{}{}, s)
+		c := client.New(server)
+		err := Execute(c, []interface{}{}, s)
 		if err == nil {
 			t.Error("Expected error for zero arguments, got nil")
 		}
 
-		err = Execute(server, []interface{}{"\"one\", \"two\""}, s)
+		err = Execute(c, []interface{}{"\"one\", \"two\""}, s)
 		if err == nil {
 			t.Error("Expected error for two arguments, got nil")
 		}
 	})
 
 	t.Run("echo invalid argument type", func(t *testing.T) {
-		client, server := net.Pipe()
-		defer client.Close()
+		cli, server := net.Pipe()
+		defer cli.Close()
 		defer server.Close()
 
-		err := Execute(server, []interface{}{123}, s)
+		c := client.New(server)
+		err := Execute(c, []interface{}{123}, s)
 		if err == nil {
 			t.Error("Expected error for non-string argument, got nil")
 		}
