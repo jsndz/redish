@@ -17,7 +17,11 @@ func Execute(c *client.Client, args []interface{}, st *store.Store, dispatch Dis
 	if !c.InTx {
 		return nil, errors.New("-ERR EXEC without MULTI\r\n")
 	}
-
+	if c.DirtyCAS {
+		c.InTx = false
+		c.TxQueue = nil
+		return []byte("*0\r\n"), nil
+	}
 	queue := c.TxQueue
 	c.InTx = false
 	c.TxQueue = nil

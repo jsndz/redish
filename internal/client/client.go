@@ -11,6 +11,7 @@ type Client struct {
 	InTx        bool
 	TxQueue     []Command
 	WatchedKeys map[string]bool
+	DirtyCAS    bool
 }
 
 func New(conn net.Conn) *Client {
@@ -18,7 +19,7 @@ func New(conn net.Conn) *Client {
 		Conn:        conn,
 		InTx:        false,
 		TxQueue:     make([]Command, 0),
-		WatchedKeys: make(map[string]bool),
+		WatchedKeys: make(map[string]bool, 0),
 	}
 }
 

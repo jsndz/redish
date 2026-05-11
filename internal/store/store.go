@@ -17,21 +17,22 @@ const (
 )
 
 type Store struct {
-	mu   sync.RWMutex
-	data map[string]*entry
+	mu          sync.RWMutex
+	data        map[string]*entry
+	watchedkeys map[string]map[*client.Client]bool
 }
 
 type entry struct {
-	kind           kind
-	value          string
-	listValue      []string
-	timer          *time.Timer
-	wacthedClients map[*client.Client]bool
+	kind      kind
+	value     string
+	listValue []string
+	timer     *time.Timer
 }
 
 func New() *Store {
 	return &Store{
-		data: make(map[string]*entry),
+		data:        make(map[string]*entry),
+		watchedkeys: map[string]map[*client.Client]bool{},
 	}
 }
 
@@ -58,6 +59,7 @@ func (s *Store) Set(key, value string, ttl time.Duration) {
 			s.Delete(k)
 		})
 	}
+	s.touchWatcher(key)
 }
 
 func (s *Store) Get(key string) (string, bool) {
@@ -80,6 +82,8 @@ func (s *Store) Delete(key string) {
 		item.timer.Stop()
 	}
 	delete(s.data, key)
+	s.touchWatcher(key)
+
 }
 
 func (s *Store) Rpush(key string, values ...string) (int, error) {
@@ -95,6 +99,7 @@ func (s *Store) Rpush(key string, values ...string) (int, error) {
 		s.data[key] = item
 	}
 	item.listValue = append(item.listValue, values...)
+	s.touchWatcher(key)
 	return len(item.listValue), nil
 }
 
@@ -145,6 +150,7 @@ func (s *Store) Incr(key string) (int, error) {
 	val, ok := s.data[key]
 	if !ok {
 		s.data[key] = &entry{kind: str, value: "1"}
+		s.touchWatcher(key)
 		return 1, nil
 	}
 	intVal, err := strconv.Atoi(val.value)
@@ -153,19 +159,47 @@ func (s *Store) Incr(key string) (int, error) {
 	}
 	intVal++
 	s.data[key].value = strconv.Itoa(intVal)
+	s.touchWatcher(key)
 	return intVal, nil
 }
 
 func (s *Store) AddWatcher(key string, c *client.Client) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	val, ok := s.data[key]
-	if !ok {
-		return fmt.Errorf("key doesn't exist")
+
+	if s.watchedkeys[key] == nil {
+		s.watchedkeys[key] = make(map[*client.Client]bool)
 	}
-	if val.wacthedClients == nil {
-		val.wacthedClients = make(map[*client.Client]bool)
+	s.watchedkeys[key][c] = true
+	if c.WatchedKeys == nil {
+		c.WatchedKeys = map[string]bool{}
 	}
-	val.wacthedClients[c] = true
+	c.WatchedKeys[key] = true
 	return nil
+}
+
+// if the key changes we call touch watchers immediately
+// this will mark all watchers dirty
+// if the client is dirty EXEC wont run
+func (s *Store) touchWatcher(key string) {
+	watchers, ok := s.watchedkeys[key]
+	if !ok {
+		return
+	}
+	for c := range watchers {
+		c.DirtyCAS = true
+	}
+}
+
+func (s *Store) RemoveAllWatchers(c *client.Client) {
+	for key, watchers := range s.watchedkeys {
+		if watchers[c] {
+			delete(watchers, c)
+			if len(watchers) == 0 {
+				delete(s.watchedkeys, key)
+			}
+		}
+	}
+	c.WatchedKeys = nil
+	c.DirtyCAS = false
 }

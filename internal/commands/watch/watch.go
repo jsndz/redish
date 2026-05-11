@@ -19,6 +19,5 @@ func Execute(c *client.Client, args []interface{}, st *store.Store) ([]byte, err
 	if err != nil {
 		return nil, errors.New("-ERR " + err.Error())
 	}
-	c.WatchedKeys[key] = true
 	return []byte("+OK\r\n"), nil
 }
