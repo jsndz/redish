@@ -15,6 +15,7 @@ import (
 	"github.com/jsndz/redish/internal/commands/ping"
 	"github.com/jsndz/redish/internal/commands/rpush"
 	"github.com/jsndz/redish/internal/commands/set"
+	"github.com/jsndz/redish/internal/commands/unwatch"
 	"github.com/jsndz/redish/internal/commands/watch"
 	"github.com/jsndz/redish/internal/store"
 )
@@ -59,9 +60,11 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store) ([]byte, err
 	case "EXEC":
 		return exec.Execute(c, cmd.Args, st, Dispatch)
 	case "DISCARD":
-		return discard.Execute(c, cmd.Args)
+		return discard.Execute(c, cmd.Args, st)
 	case "WATCH":
 		return watch.Execute(c, cmd.Args, st)
+	case "UNWATCH":
+		return unwatch.Execute(c, cmd.Args, st)
 	default:
 		return nil, errors.New("-ERR unknown command\r\n")
 	}
