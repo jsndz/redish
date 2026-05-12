@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/jsndz/redish/internal/client"
+	"github.com/jsndz/redish/internal/configs"
 	"github.com/jsndz/redish/internal/store"
-	"github.com/jsndz/redish/util"
 )
 
-func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *util.Config) ([]byte, error) {
+func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *configs.Config) ([]byte, error) {
 	if len(args) < 1 {
 		return nil, errors.New("-ERR wrong number of arguments for 'CONFIG' command\r\n")
 	}
@@ -27,7 +27,7 @@ func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *util.Co
 	}
 }
 
-func GetConfig(c *client.Client, args []interface{}, st *store.Store, cfg *util.Config) ([]byte, error) {
+func GetConfig(c *client.Client, args []interface{}, st *store.Store, cfg *configs.Config) ([]byte, error) {
 	arg, ok := args[0].(string)
 	if !ok {
 		return nil, errors.New("-ERR invalid request for GET\r\n")

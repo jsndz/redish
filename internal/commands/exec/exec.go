@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"github.com/jsndz/redish/internal/client"
+	"github.com/jsndz/redish/internal/configs"
 	"github.com/jsndz/redish/internal/store"
-	"github.com/jsndz/redish/util"
 )
 
-type Dispatcher func(*client.Client, []interface{}, *store.Store, *util.Config) ([]byte, error)
+type Dispatcher func(*client.Client, []interface{}, *store.Store, *configs.Config) ([]byte, error)
 
-func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *util.Config, dispatch Dispatcher) ([]byte, error) {
+func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *configs.Config, dispatch Dispatcher) ([]byte, error) {
 	if len(args) != 0 {
 		return nil, errors.New("-ERR wrong number of arguments\r\n")
 	}

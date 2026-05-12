@@ -18,11 +18,11 @@ import (
 	"github.com/jsndz/redish/internal/commands/set"
 	"github.com/jsndz/redish/internal/commands/unwatch"
 	"github.com/jsndz/redish/internal/commands/watch"
+	"github.com/jsndz/redish/internal/configs"
 	"github.com/jsndz/redish/internal/store"
-	"github.com/jsndz/redish/util"
 )
 
-func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *util.Config) ([]byte, error) {
+func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *configs.Config) ([]byte, error) {
 	cmdName, ok := arr[0].(string)
 	if !ok {
 		return nil, errors.New("-ERR invalid command\r\n")

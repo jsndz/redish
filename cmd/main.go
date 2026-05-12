@@ -7,11 +7,12 @@ import (
 
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/commands"
+	"github.com/jsndz/redish/internal/configs"
 	"github.com/jsndz/redish/internal/store"
 	"github.com/jsndz/redish/util"
 )
 
-func handler(c *client.Client, st *store.Store, cfg *util.Config) {
+func handler(c *client.Client, st *store.Store, cfg *configs.Config) {
 	buf := make([]byte, 1024)
 
 	for {
@@ -37,7 +38,8 @@ func handler(c *client.Client, st *store.Store, cfg *util.Config) {
 }
 
 func main() {
-	cfg := util.ParseFlags()
+	cfg := configs.NewConfig()
+	cfg.SetConfig()
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379", err.Error())
@@ -53,6 +55,6 @@ func main() {
 			os.Exit(1)
 		}
 		c := client.New(conn)
-		go handler(c, st, &cfg)
+		go handler(c, st, cfg)
 	}
 }
