@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/commands"
+	"github.com/jsndz/redish/internal/commands/aof"
 	"github.com/jsndz/redish/internal/configs"
 	"github.com/jsndz/redish/internal/store"
 	"github.com/jsndz/redish/util"
 )
 
 func handler(c *client.Client, st *store.Store, cfg *configs.Config) {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4096)
 
 	for {
 		n, err := c.Conn.Read(buf)
@@ -21,7 +23,9 @@ func handler(c *client.Client, st *store.Store, cfg *configs.Config) {
 			return
 		}
 
-		val, _ := util.RESPFormatter(string(buf[:n]))
+		raw := string(buf[:n])
+
+		val, _ := util.RESPFormatter(raw)
 
 		arr, ok := val.([]interface{})
 		if !ok || len(arr) == 0 {
@@ -29,17 +33,38 @@ func handler(c *client.Client, st *store.Store, cfg *configs.Config) {
 			continue
 		}
 
-		if data, err := commands.Dispatch(c, arr, st, cfg); err != nil {
-			c.Write([]byte(err.Error()))
-		} else {
-			c.Write(data)
+		cmdName, ok := arr[0].(string)
+		if !ok {
+			c.Write([]byte("-ERR invalid command\r\n"))
+			continue
 		}
+
+		resp, err := commands.Dispatch(c, arr, st, cfg)
+
+		if err != nil {
+			c.Write([]byte(err.Error()))
+			continue
+		}
+
+		if cfg.AppendOnly && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
+			cfg.WriteToAppendFile(raw)
+		}
+
+		c.Write(resp)
 	}
 }
-
 func main() {
-	cfg := configs.NewConfig()
-	cfg.SetConfig()
+	cfg := configs.SetConfig()
+	appendCommands := cfg.RestoreFromAppendFile()
+	st := store.New()
+	c := &client.Client{}
+
+	for _, cmd := range appendCommands {
+		_, err := commands.Dispatch(c, cmd, st, cfg)
+		if err != nil {
+			panic(err)
+		}
+	}
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379", err.Error())
@@ -47,7 +72,7 @@ func main() {
 	}
 
 	defer l.Close()
-	st := store.New()
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {

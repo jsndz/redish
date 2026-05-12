@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -41,4 +42,20 @@ func RESPFormatter(msg string) (interface{}, int) {
 		return arr, idx
 	}
 	return nil, 0
+}
+
+func ToRESP(input string) string {
+	parts := strings.Fields(input)
+
+	var resp strings.Builder
+
+	resp.WriteString(fmt.Sprintf("*%d\r\n", len(parts)))
+
+	for _, part := range parts {
+		resp.WriteString(
+			fmt.Sprintf("$%d\r\n%s\r\n", len(part), part),
+		)
+	}
+
+	return resp.String()
 }
