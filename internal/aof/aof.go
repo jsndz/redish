@@ -1,8 +1,6 @@
-// configs/config.go
-package configs
+package aof
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,76 +9,58 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/jsndz/redish/internal/config"
 	"github.com/jsndz/redish/util"
 )
 
-type Config struct {
-	Dir             string
-	AppendOnly      bool
-	AppendDirName   string
-	AppendFileName  string
-	AppendFsyncMode string
-	TimesAppended   int
-	AppendType      string
-
-	mu sync.Mutex
-}
 type ManifestEntry struct {
 	File string
 	Seq  int
 	Type string
 }
 
-func SetConfig() *Config {
-	var cfg Config
-	flag.StringVar(&cfg.Dir, "dir", ".", "data directory")
+type AOF struct {
+	cfg           *config.Config
+	mu            sync.Mutex
+	timesAppended int
+}
 
-	flag.BoolVar(
-		&cfg.AppendOnly,
-		"appendonly",
-		false,
-		"enable append only mode",
-	)
+var writeCommands = map[string]bool{
+	"SET":     true,
+	"INCR":    true,
+	"RPUSH":   true,
+	"MULTI":   true,
+	"EXEC":    true,
+	"DISCARD": true,
+}
 
-	flag.StringVar(
-		&cfg.AppendDirName,
-		"appenddirname",
-		"appendonlydir",
-		"append only directory name",
-	)
+func IsWriteCommand(cmd string) bool {
+	return writeCommands[cmd]
+}
 
-	flag.StringVar(
-		&cfg.AppendFileName,
-		"appendfilename",
-		"appendonly.aof",
-		"append only file name",
-	)
-
-	flag.StringVar(
-		&cfg.AppendFsyncMode,
-		"appendfsync",
-		"everysec",
-		"fsync policy",
-	)
-	flag.Parse()
-
+func New(cfg *config.Config) (*AOF, error) {
 	if !cfg.AppendOnly {
-		return &cfg
+		return nil, nil
 	}
+
+	a := &AOF{cfg: cfg}
 
 	folder := filepath.Join(cfg.Dir, cfg.AppendDirName)
-
 	err := os.MkdirAll(folder, 0755)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	entries, _ := cfg.ParseManifest()
+
+	entries, err := a.ParseManifest()
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
 
 	if len(entries) > 0 {
-		cfg.TimesAppended = entries[len(entries)-1].Seq
+		a.timesAppended = entries[len(entries)-1].Seq
 	} else {
-		cfg.TimesAppended = 1
-		filePath := cfg.GetAppendFilePath()
+		a.timesAppended = 1
+		filePath := a.getAppendFilePath()
 
 		file, err := os.OpenFile(
 			filePath,
@@ -88,32 +68,33 @@ func SetConfig() *Config {
 			0644,
 		)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		file.Close()
 
-		manifestPath := cfg.GetAppendManifestFilePath()
+		manifestPath := a.getAppendManifestFilePath()
 		manifest, err := os.OpenFile(
 			manifestPath,
 			os.O_CREATE|os.O_APPEND|os.O_RDWR,
 			0644,
 		)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		defer manifest.Close()
 
-		WriteToManifest(
+		a.writeToManifest(
 			manifest,
 			cfg.AppendFileName,
-			cfg.TimesAppended,
+			a.timesAppended,
 			"incr",
 		)
 	}
-	return &cfg
+
+	return a, nil
 }
 
-func WriteToManifest(
+func (a *AOF) writeToManifest(
 	file *os.File,
 	filename string,
 	seq int,
@@ -136,38 +117,40 @@ func WriteToManifest(
 	}
 }
 
-func (cfg *Config) GetAppendFilePath() string {
-	name := strings.TrimSuffix(cfg.AppendFileName, ".aof")
+func (a *AOF) getAppendFilePath() string {
+	name := strings.TrimSuffix(a.cfg.AppendFileName, ".aof")
 
+	// The original code used cfg.AppendType which was not initialized.
+	// In SetConfig it used "incr".
 	return filepath.Join(
-		cfg.Dir,
-		cfg.AppendDirName,
+		a.cfg.Dir,
+		a.cfg.AppendDirName,
 		fmt.Sprintf(
 			"%s.%d.%s.aof",
 			name,
-			cfg.TimesAppended,
-			cfg.AppendType,
+			a.timesAppended,
+			"incr",
 		),
 	)
 }
 
-func (cfg *Config) GetAppendManifestFilePath() string {
-	name := strings.TrimSuffix(cfg.AppendFileName, ".aof")
+func (a *AOF) getAppendManifestFilePath() string {
+	name := strings.TrimSuffix(a.cfg.AppendFileName, ".aof")
 
 	return filepath.Join(
-		cfg.Dir,
-		cfg.AppendDirName,
+		a.cfg.Dir,
+		a.cfg.AppendDirName,
 		fmt.Sprintf(
 			"%s.manifest", name,
 		),
 	)
 }
 
-func (cfg *Config) WriteToAppendFile(data string) {
-	cfg.mu.Lock()
-	defer cfg.mu.Unlock()
+func (a *AOF) Write(data string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	filePath := cfg.GetAppendFilePath()
+	filePath := a.getAppendFilePath()
 
 	file, err := os.OpenFile(
 		filePath,
@@ -184,16 +167,14 @@ func (cfg *Config) WriteToAppendFile(data string) {
 		panic(err)
 	}
 
-	if cfg.AppendFsyncMode == "always" {
+	if a.cfg.AppendFsyncMode == "always" {
 		file.Sync()
 	}
 }
 
-func (cfg *Config) ParseManifest() ([]ManifestEntry, error) {
-	if !cfg.AppendOnly {
-		return nil, nil
-	}
-	b, err := os.ReadFile(cfg.GetAppendManifestFilePath())
+func (a *AOF) ParseManifest() ([]ManifestEntry, error) {
+	manifestPath := a.getAppendManifestFilePath()
+	b, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -220,8 +201,8 @@ func (cfg *Config) ParseManifest() ([]ManifestEntry, error) {
 
 		entry := ManifestEntry{
 			File: filepath.Join(
-				cfg.Dir,
-				cfg.AppendDirName,
+				a.cfg.Dir,
+				a.cfg.AppendDirName,
 				parts[1],
 			),
 			Seq:  seq,
@@ -237,8 +218,8 @@ func (cfg *Config) ParseManifest() ([]ManifestEntry, error) {
 	return entries, nil
 }
 
-func (cfg *Config) RestoreFromAppendFile() [][]interface{} {
-	entries, err := cfg.ParseManifest()
+func (a *AOF) Restore() [][]interface{} {
+	entries, err := a.ParseManifest()
 	if err != nil {
 		return nil
 	}
@@ -258,7 +239,7 @@ func (cfg *Config) RestoreFromAppendFile() [][]interface{} {
 			for idx < len(content) {
 				cmd, n := util.RESPFormatter(content[idx:])
 				arr, ok := cmd.([]interface{})
-				if !ok && len(arr) > 0 {
+				if ok && len(arr) > 0 {
 					rawCommands = append(rawCommands, arr)
 				}
 				idx += n

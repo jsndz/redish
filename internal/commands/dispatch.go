@@ -5,11 +5,11 @@ import (
 	"strings"
 
 	"github.com/jsndz/redish/internal/client"
-	"github.com/jsndz/redish/internal/commands/config"
 	"github.com/jsndz/redish/internal/commands/discard"
 	"github.com/jsndz/redish/internal/commands/echo"
 	"github.com/jsndz/redish/internal/commands/exec"
 	"github.com/jsndz/redish/internal/commands/get"
+	"github.com/jsndz/redish/internal/commands/getconfig"
 	"github.com/jsndz/redish/internal/commands/incr"
 	"github.com/jsndz/redish/internal/commands/lrange"
 	"github.com/jsndz/redish/internal/commands/multi"
@@ -18,11 +18,11 @@ import (
 	"github.com/jsndz/redish/internal/commands/set"
 	"github.com/jsndz/redish/internal/commands/unwatch"
 	"github.com/jsndz/redish/internal/commands/watch"
-	"github.com/jsndz/redish/internal/configs"
+	"github.com/jsndz/redish/internal/config"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *configs.Config) ([]byte, error) {
+func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config) ([]byte, error) {
 	cmdName, ok := arr[0].(string)
 	if !ok {
 		return nil, errors.New("-ERR invalid command\r\n")
@@ -68,7 +68,7 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *configs
 	case "UNWATCH":
 		return unwatch.Execute(c, cmd.Args, st)
 	case "CONFIG":
-		return config.Execute(c, cmd.Args, st, cfg)
+		return getconfig.Execute(c, cmd.Args, st, cfg)
 	default:
 		return nil, errors.New("-ERR unknown command\r\n")
 	}
