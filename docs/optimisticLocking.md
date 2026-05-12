@@ -36,3 +36,5 @@ and when the key is deleted remove watchers
 and call touch watchers when the set function is called 
 if the key has any watchers then it is set as dirty
  and transaction wont run if it is dirty
+
+ there are also commands like unwatch discard 
