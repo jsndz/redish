@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -22,6 +24,11 @@ type Config struct {
 	AppendType      string
 
 	mu sync.Mutex
+}
+type ManifestEntry struct {
+	File string
+	Seq  int
+	Type string
 }
 
 func SetConfig() *Config {
@@ -61,44 +68,48 @@ func SetConfig() *Config {
 		return &cfg
 	}
 
-	cfg.TimesAppended++
-
 	folder := filepath.Join(cfg.Dir, cfg.AppendDirName)
 
 	err := os.MkdirAll(folder, 0755)
 	if err != nil {
 		panic(err)
 	}
+	entries, _ := cfg.ParseManifest()
 
-	filePath := cfg.GetAppendFilePath()
+	if len(entries) > 0 {
+		cfg.TimesAppended = entries[len(entries)-1].Seq
+	} else {
+		cfg.TimesAppended = 1
+		filePath := cfg.GetAppendFilePath()
 
-	file, err := os.OpenFile(
-		filePath,
-		os.O_CREATE|os.O_APPEND|os.O_RDWR,
-		0644,
-	)
-	if err != nil {
-		panic(err)
+		file, err := os.OpenFile(
+			filePath,
+			os.O_CREATE|os.O_APPEND|os.O_RDWR,
+			0644,
+		)
+		if err != nil {
+			panic(err)
+		}
+		file.Close()
+
+		manifestPath := cfg.GetAppendManifestFilePath()
+		manifest, err := os.OpenFile(
+			manifestPath,
+			os.O_CREATE|os.O_APPEND|os.O_RDWR,
+			0644,
+		)
+		if err != nil {
+			panic(err)
+		}
+		defer manifest.Close()
+
+		WriteToManifest(
+			manifest,
+			cfg.AppendFileName,
+			cfg.TimesAppended,
+			"incr",
+		)
 	}
-	file.Close()
-
-	manifestPath := cfg.GetAppendManifestFilePath()
-	manifest, err := os.OpenFile(
-		manifestPath,
-		os.O_CREATE|os.O_APPEND|os.O_RDWR,
-		0644,
-	)
-	if err != nil {
-		panic(err)
-	}
-	defer manifest.Close()
-
-	WriteToManifest(
-		manifest,
-		cfg.AppendFileName,
-		cfg.TimesAppended,
-		cfg.AppendType,
-	)
 	return &cfg
 }
 
@@ -168,7 +179,7 @@ func (cfg *Config) WriteToAppendFile(data string) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(data + "\n")
+	_, err = file.WriteString(data)
 	if err != nil {
 		panic(err)
 	}
@@ -178,45 +189,82 @@ func (cfg *Config) WriteToAppendFile(data string) {
 	}
 }
 
-func (cfg *Config) RestoreFromAppendFile() [][]interface{} {
+func (cfg *Config) ParseManifest() ([]ManifestEntry, error) {
 	if !cfg.AppendOnly {
-		return nil
+		return nil, nil
 	}
 	b, err := os.ReadFile(cfg.GetAppendManifestFilePath())
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	lines := strings.Split(string(b), "\n")
-	var incrFile string
+	var entries []ManifestEntry
 
 	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		parts := strings.Split(line, " ")
-		if len(parts) < 6 {
+		parts := strings.Fields(line)
+
+		if len(parts) < 6 ||
+			parts[0] != "file" ||
+			parts[2] != "seq" ||
+			parts[4] != "type" {
+			continue
+		}
+		seq, err := strconv.Atoi(parts[3])
+		if err != nil {
 			continue
 		}
 
-		if parts[5] != "i" {
-			continue
+		entry := ManifestEntry{
+			File: filepath.Join(
+				cfg.Dir,
+				cfg.AppendDirName,
+				parts[1],
+			),
+			Seq:  seq,
+			Type: parts[5],
 		}
-		incrFile = filepath.Join(cfg.Dir, cfg.AppendDirName, parts[1])
-		break
+		entries = append(entries, entry)
+
 	}
-	data, err := os.ReadFile(incrFile)
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Seq < entries[j].Seq
+	})
+	return entries, nil
+}
+
+func (cfg *Config) RestoreFromAppendFile() [][]interface{} {
+	entries, err := cfg.ParseManifest()
 	if err != nil {
 		return nil
 	}
-	cmds := strings.Split(string(data), "\n")
 	var rawCommands [][]interface{}
-	for _, cmd := range cmds {
-		command, _ := util.RESPFormatter(cmd)
-		arr, ok := command.([]interface{})
-		if !ok || len(arr) == 0 {
+	for _, entry := range entries {
+		switch entry.Type {
+		case "b":
 			continue
+		case "i":
+			data, err := os.ReadFile(entry.File)
+			if err != nil {
+				continue
+			}
+
+			content := string(data)
+			idx := 0
+			for idx < len(content) {
+				cmd, n := util.RESPFormatter(content[idx:])
+				arr, ok := cmd.([]interface{})
+				if !ok && len(arr) > 0 {
+					rawCommands = append(rawCommands, arr)
+				}
+				idx += n
+			}
 		}
-		rawCommands = append(rawCommands, arr)
 	}
+
 	return rawCommands
 }
