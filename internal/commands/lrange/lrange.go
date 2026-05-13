@@ -10,9 +10,7 @@ import (
 )
 
 func Execute(args []interface{}, st *store.Store) ([]byte, error) {
-	if len(args) < 2 {
-		return nil, errors.New("-ERR invalid number of args")
-	}
+
 	if len(args) != 3 {
 		return nil, errors.New("-ERR invalid number of args")
 

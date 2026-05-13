@@ -119,9 +119,6 @@ func (a *AOF) writeToManifest(
 
 func (a *AOF) getAppendFilePath() string {
 	name := strings.TrimSuffix(a.cfg.AppendFileName, ".aof")
-
-	// The original code used cfg.AppendType which was not initialized.
-	// In SetConfig it used "incr".
 	return filepath.Join(
 		a.cfg.Dir,
 		a.cfg.AppendDirName,

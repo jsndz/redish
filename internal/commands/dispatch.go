@@ -14,15 +14,17 @@ import (
 	"github.com/jsndz/redish/internal/commands/lrange"
 	"github.com/jsndz/redish/internal/commands/multi"
 	"github.com/jsndz/redish/internal/commands/ping"
+	"github.com/jsndz/redish/internal/commands/repl"
 	"github.com/jsndz/redish/internal/commands/rpush"
 	"github.com/jsndz/redish/internal/commands/set"
 	"github.com/jsndz/redish/internal/commands/unwatch"
 	"github.com/jsndz/redish/internal/commands/watch"
 	"github.com/jsndz/redish/internal/config"
+	"github.com/jsndz/redish/internal/server"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config) ([]byte, error) {
+func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config, replication *server.Replication) ([]byte, error) {
 	cmdName, ok := arr[0].(string)
 	if !ok {
 		return nil, errors.New("-ERR invalid command\r\n")
@@ -60,7 +62,7 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.
 		c.InTx = true
 		return multi.Execute(cmd.Args, st)
 	case "EXEC":
-		return exec.Execute(c, cmd.Args, st, cfg, Dispatch)
+		return exec.Execute(c, cmd.Args, st, cfg, replication, Dispatch)
 	case "DISCARD":
 		return discard.Execute(c, cmd.Args, st)
 	case "WATCH":
@@ -69,6 +71,10 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.
 		return unwatch.Execute(c, cmd.Args, st)
 	case "CONFIG":
 		return getconfig.Execute(c, cmd.Args, st, cfg)
+	case "REPLCONF":
+		return repl.ExecuteReplConf(cmd.Args, st)
+	case "PSYNC":
+		return repl.ExecutePsync(cmd.Args, st, replication)
 	default:
 		return nil, errors.New("-ERR unknown command\r\n")
 	}

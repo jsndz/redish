@@ -6,12 +6,13 @@ import (
 
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/config"
+	"github.com/jsndz/redish/internal/server"
 	"github.com/jsndz/redish/internal/store"
 )
 
-type Dispatcher func(*client.Client, []interface{}, *store.Store, *config.Config) ([]byte, error)
+type Dispatcher func(*client.Client, []interface{}, *store.Store, *config.Config, *server.Replication) ([]byte, error)
 
-func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, dispatch Dispatcher) ([]byte, error) {
+func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, replication *server.Replication, dispatch Dispatcher) ([]byte, error) {
 	if len(args) != 0 {
 		return nil, errors.New("-ERR wrong number of arguments\r\n")
 	}
@@ -30,7 +31,7 @@ func Execute(c *client.Client, args []interface{}, st *store.Store, cfg *config.
 	res := []byte(fmt.Sprintf("*%d\r\n", len(queue)))
 	for _, qCmd := range queue {
 		qArr := append([]interface{}{qCmd.Name}, qCmd.Args...)
-		qRes, err := dispatch(c, qArr, st, cfg)
+		qRes, err := dispatch(c, qArr, st, cfg, replication)
 		if err != nil {
 			res = append(res, []byte(err.Error())...)
 		} else {

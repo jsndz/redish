@@ -10,11 +10,12 @@ import (
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/commands"
 	"github.com/jsndz/redish/internal/config"
+	"github.com/jsndz/redish/internal/server"
 	"github.com/jsndz/redish/internal/store"
 	"github.com/jsndz/redish/util"
 )
 
-func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *aof.AOF) {
+func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *aof.AOF, repl *server.Replication) {
 	buf := make([]byte, 4096)
 
 	for {
@@ -39,7 +40,7 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 			continue
 		}
 
-		resp, err := commands.Dispatch(c, arr, st, cfg)
+		resp, err := commands.Dispatch(c, arr, st, cfg, repl)
 
 		if err != nil {
 			c.Write([]byte(err.Error()))
@@ -55,28 +56,22 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 }
 
 func main() {
-	cfg := config.SetConfig()
-	aofHandler, err := aof.New(cfg)
-	if err != nil {
-		panic(err)
-	}
-
-	st := store.New()
+	server := server.NewServer()
 	c := &client.Client{}
 
-	if aofHandler != nil {
-		appendCommands := aofHandler.Restore()
+	if server.Aof != nil {
+		appendCommands := server.Aof.Restore()
 		for _, cmd := range appendCommands {
-			_, err := commands.Dispatch(c, cmd, st, cfg)
+			_, err := commands.Dispatch(c, cmd, server.Store, server.Config, server.Replication)
 			if err != nil {
 				panic(err)
 			}
 		}
 	}
-
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	connectionUrl := fmt.Sprintf("0.0.0.0:%d", server.Config.Port)
+	l, err := net.Listen("tcp", connectionUrl)
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379", err.Error())
+		fmt.Println("Failed to bind to port ", err.Error())
 		os.Exit(1)
 	}
 
@@ -89,6 +84,6 @@ func main() {
 			os.Exit(1)
 		}
 		c := client.New(conn)
-		go handler(c, st, cfg, aofHandler)
+		go handler(c, server.Store, server.Config, server.Aof, server.Replication)
 	}
 }

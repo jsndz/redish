@@ -6,13 +6,15 @@ import (
 )
 
 type Config struct {
+	Port int
+
 	Dir             string
 	AppendOnly      bool
 	AppendDirName   string
 	AppendFileName  string
 	AppendFsyncMode string
-
-	mu sync.Mutex
+	Replicaof       string
+	mu              sync.Mutex
 }
 
 func SetConfig() *Config {
@@ -46,6 +48,9 @@ func SetConfig() *Config {
 		"everysec",
 		"fsync policy",
 	)
+
+	flag.IntVar(&cfg.Port, "port", 6379, "server port")
+	flag.StringVar(&cfg.Replicaof, "replicaof", "", "replica of master in format host:port")
 	flag.Parse()
 
 	return &cfg
