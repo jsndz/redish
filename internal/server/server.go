@@ -1,12 +1,15 @@
 package server
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
 
 	"github.com/jsndz/redish/internal/aof"
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/config"
+	"github.com/jsndz/redish/internal/rdb"
 	"github.com/jsndz/redish/internal/store"
 	"github.com/jsndz/redish/util"
 )
@@ -16,6 +19,13 @@ type Replication struct {
 	ReplID     string
 	ReplOffset int64
 	Replicas   map[string]*client.Client
+}
+
+func (r *Replication) WriteToReplicas(raw []byte) {
+	for _, replica := range r.Replicas {
+		replica.Conn.Write(raw)
+	}
+	r.ReplOffset += int64(len(raw))
 }
 
 type Server struct {
@@ -87,6 +97,38 @@ func NewServer() *Server {
 		}
 
 		conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
+		n, err = conn.Read(resp)
+		if err != nil {
+			panic(err)
+		}
+		reader := bufio.NewReader(conn)
+		line, err := reader.ReadString('\n')
+		var cmd string
+		var offset int64
+		fmt.Sscanf(line, "%s %s %d\r\n", cmd, replId, replOffset)
+
+		if cmd != "+FULLRESYNC" {
+			panic("invalid resp")
+		}
+		replOffset = offset
+
+		bulkHeader, err := reader.ReadString('\n')
+
+		if err != nil {
+			panic(err)
+		}
+		var rdbLen int
+		fmt.Sscanf(bulkHeader, "$%d\r\n", &rdbLen)
+		data := make([]byte, rdbLen)
+		_, err = io.ReadFull(reader, data)
+		if err != nil {
+			panic(err)
+		}
+		err = rdb.LoadRDB(data)
+		if err != nil {
+			panic(err)
+		}
+
 	}
 	replication := &Replication{
 		Replicas:   replicas,

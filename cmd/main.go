@@ -15,7 +15,7 @@ import (
 	"github.com/jsndz/redish/util"
 )
 
-func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *aof.AOF, repl *server.Replication) {
+func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *aof.AOF, replication *server.Replication) {
 	buf := make([]byte, 4096)
 
 	for {
@@ -39,8 +39,10 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 			c.Write([]byte("-ERR invalid command\r\n"))
 			continue
 		}
-
-		resp, err := commands.Dispatch(c, arr, st, cfg, repl)
+		if replication.Role == "master" && replication.Replicas != nil && aof.IsWriteCommand(cmdName) {
+			replication.WriteToReplicas(buf[:n])
+		}
+		resp, err := commands.Dispatch(c, arr, st, cfg, replication)
 
 		if err != nil {
 			c.Write([]byte(err.Error()))
@@ -51,7 +53,9 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 			aofHandler.Write(raw)
 		}
 
-		c.Write(resp)
+		if !c.IsMasterConnection {
+			c.Write(resp)
+		}
 	}
 }
 
@@ -79,11 +83,15 @@ func main() {
 
 	for {
 		conn, err := l.Accept()
+
 		if err != nil {
 			fmt.Println("Failed to accept connection on 6379")
 			os.Exit(1)
 		}
 		c := client.New(conn)
+		if conn.RemoteAddr().String() == server.Config.Replicaof {
+			c.IsMasterConnection = true
+		}
 		go handler(c, server.Store, server.Config, server.Aof, server.Replication)
 	}
 }

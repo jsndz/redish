@@ -74,7 +74,7 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.
 	case "REPLCONF":
 		return repl.ExecuteReplConf(cmd.Args, st)
 	case "PSYNC":
-		return repl.ExecutePsync(cmd.Args, st, replication)
+		return repl.ExecutePsync(c, cmd.Args, st, replication)
 	default:
 		return nil, errors.New("-ERR unknown command\r\n")
 	}
