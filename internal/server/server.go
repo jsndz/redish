@@ -33,8 +33,7 @@ type Server struct {
 	Replication *Replication
 	Store       *store.Store
 	Config      *config.Config
-	MasterPort  int
-	MasterHost  string
+	Master      *client.Client
 	Aof         *aof.AOF
 }
 
@@ -49,11 +48,13 @@ func NewServer() *Server {
 	var replicas map[string]*client.Client
 	var replId string
 	var replOffset int64
+	var master *client.Client
 	if cfg.Replicaof == "" {
 		role = "master"
 		replicas = make(map[string]*client.Client)
 		replId, _ = util.RandString(10)
 		replOffset = 0
+		master = nil
 	} else {
 		role = "replica"
 		replicas = nil
@@ -65,7 +66,8 @@ func NewServer() *Server {
 		if err != nil {
 			panic(err)
 		}
-
+		master = client.New(conn)
+		master.IsMasterConnection = true
 		conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
 
 		resp := make([]byte, 1024)
@@ -139,8 +141,7 @@ func NewServer() *Server {
 	return &Server{
 		Clients:     make(map[string]*client.Client),
 		Store:       store.New(),
-		MasterPort:  cfg.Port,
-		MasterHost:  "localhost",
+		Master:      master,
 		Aof:         aofhandler,
 		Config:      cfg,
 		Replication: replication,

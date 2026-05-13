@@ -39,16 +39,16 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 			c.Write([]byte("-ERR invalid command\r\n"))
 			continue
 		}
-		if replication.Role == "master" && replication.Replicas != nil && aof.IsWriteCommand(cmdName) {
-			replication.WriteToReplicas(buf[:n])
-		}
+
 		resp, err := commands.Dispatch(c, arr, st, cfg, replication)
 
 		if err != nil {
 			c.Write([]byte(err.Error()))
 			continue
 		}
-
+		if replication.Role == "master" && replication.Replicas != nil && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
+			replication.WriteToReplicas(buf[:n])
+		}
 		if aofHandler != nil && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
 			aofHandler.Write(raw)
 		}
@@ -61,6 +61,15 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 
 func main() {
 	server := server.NewServer()
+	if server.Master != nil {
+		go handler(
+			server.Master,
+			server.Store,
+			server.Config,
+			server.Aof,
+			server.Replication,
+		)
+	}
 	c := &client.Client{}
 
 	if server.Aof != nil {
@@ -89,9 +98,7 @@ func main() {
 			os.Exit(1)
 		}
 		c := client.New(conn)
-		if conn.RemoteAddr().String() == server.Config.Replicaof {
-			c.IsMasterConnection = true
-		}
+
 		go handler(c, server.Store, server.Config, server.Aof, server.Replication)
 	}
 }
