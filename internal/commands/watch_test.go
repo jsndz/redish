@@ -19,7 +19,7 @@ func TestWatchExec(t *testing.T) {
 
 	t.Run("Optimistic locking works - transaction aborts", func(t *testing.T) {
 		// Client 1 watches 'balance'
-		res, err := Dispatch(c1, []interface{}{"WATCH", "balance"}, s, nil, nil)
+		res, err := Dispatch(c1, []interface{}{"WATCH", "balance"}, s, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("WATCH failed: %v", err)
 		}
@@ -28,19 +28,19 @@ func TestWatchExec(t *testing.T) {
 		}
 
 		// Client 1 starts MULTI
-		Dispatch(c1, []interface{}{"MULTI"}, s, nil, nil)
+		Dispatch(c1, []interface{}{"MULTI"}, s, nil, nil, nil)
 
 		// Client 1 queues SET balance 20
-		Dispatch(c1, []interface{}{"SET", "balance", "20"}, s, nil, nil)
+		Dispatch(c1, []interface{}{"SET", "balance", "20"}, s, nil, nil, nil)
 
 		// Client 2 modifies 'balance'
-		_, err = Dispatch(c2, []interface{}{"SET", "balance", "30"}, s, nil, nil)
+		_, err = Dispatch(c2, []interface{}{"SET", "balance", "30"}, s, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("Client 2 SET failed: %v", err)
 		}
 
 		// Client 1 executes transaction
-		res, err = Dispatch(c1, []interface{}{"EXEC"}, s, nil, nil)
+		res, err = Dispatch(c1, []interface{}{"EXEC"}, s, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("EXEC failed: %v", err)
 		}
@@ -50,7 +50,7 @@ func TestWatchExec(t *testing.T) {
 			t.Errorf("Expected aborted transaction %q, got %q", expected, string(res))
 		}
 
-		res, _ = Dispatch(c1, []interface{}{"GET", "balance"}, s, nil, nil)
+		res, _ = Dispatch(c1, []interface{}{"GET", "balance"}, s, nil, nil, nil)
 		if string(res) != "$2\r\n30\r\n" {
 			t.Errorf("Expected balance to be 30, got %q", string(res))
 		}
@@ -61,11 +61,11 @@ func TestWatchExec(t *testing.T) {
 		cli1, _ := net.Pipe()
 		c1 := client.New(cli1)
 
-		Dispatch(c1, []interface{}{"WATCH", "foo"}, s, nil, nil)
-		Dispatch(c1, []interface{}{"MULTI"}, s, nil, nil)
-		Dispatch(c1, []interface{}{"SET", "foo", "bar"}, s, nil, nil)
+		Dispatch(c1, []interface{}{"WATCH", "foo"}, s, nil, nil, nil)
+		Dispatch(c1, []interface{}{"MULTI"}, s, nil, nil, nil)
+		Dispatch(c1, []interface{}{"SET", "foo", "bar"}, s, nil, nil, nil)
 
-		res, err := Dispatch(c1, []interface{}{"EXEC"}, s, nil, nil)
+		res, err := Dispatch(c1, []interface{}{"EXEC"}, s, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("EXEC failed: %v", err)
 		}
@@ -75,7 +75,7 @@ func TestWatchExec(t *testing.T) {
 			t.Errorf("Expected successful transaction %q, got %q", expected, string(res))
 		}
 
-		res, _ = Dispatch(c1, []interface{}{"GET", "foo"}, s, nil, nil)
+		res, _ = Dispatch(c1, []interface{}{"GET", "foo"}, s, nil, nil, nil)
 		if string(res) != "$3\r\nbar\r\n" {
 			t.Errorf("Expected foo to be bar, got %q", string(res))
 		}
@@ -88,15 +88,15 @@ func TestWatchExec(t *testing.T) {
 		cli2, _ := net.Pipe()
 		c2 := client.New(cli2)
 
-		Dispatch(c1, []interface{}{"WATCH", "key1"}, s, nil, nil)
-		Dispatch(c1, []interface{}{"WATCH", "key2"}, s, nil, nil)
+		Dispatch(c1, []interface{}{"WATCH", "key1"}, s, nil, nil, nil)
+		Dispatch(c1, []interface{}{"WATCH", "key2"}, s, nil, nil, nil)
 
-		Dispatch(c1, []interface{}{"MULTI"}, s, nil, nil)
-		Dispatch(c1, []interface{}{"SET", "key1", "val1"}, s, nil, nil)
+		Dispatch(c1, []interface{}{"MULTI"}, s, nil, nil, nil)
+		Dispatch(c1, []interface{}{"SET", "key1", "val1"}, s, nil, nil, nil)
 
-		Dispatch(c2, []interface{}{"SET", "key2", "changed"}, s, nil, nil)
+		Dispatch(c2, []interface{}{"SET", "key2", "changed"}, s, nil, nil, nil)
 
-		res, err := Dispatch(c1, []interface{}{"EXEC"}, s, nil, nil)
+		res, err := Dispatch(c1, []interface{}{"EXEC"}, s, nil, nil, nil)
 		if err != nil {
 			t.Fatalf("EXEC failed: %v", err)
 		}

@@ -8,9 +8,9 @@ import (
 
 func TestPingExecute(t *testing.T) {
 	s := store.New()
-	
+
 	t.Run("ping with no arguments", func(t *testing.T) {
-		response, err := Execute([]interface{}{}, s)
+		response, err := Execute(nil, []interface{}{}, s)
 		if err != nil {
 			t.Errorf("Execute returned error: %v", err)
 		}
@@ -22,7 +22,7 @@ func TestPingExecute(t *testing.T) {
 	})
 
 	t.Run("ping with arguments", func(t *testing.T) {
-		_, err := Execute([]interface{}{"extra"}, s)
+		_, err := Execute(nil, []interface{}{"extra"}, s)
 		if err == nil {
 			t.Error("Expected error for wrong number of arguments, got nil")
 		}

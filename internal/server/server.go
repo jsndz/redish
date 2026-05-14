@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jsndz/redish/internal/aof"
+	"github.com/jsndz/redish/internal/channel"
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/commands"
 	"github.com/jsndz/redish/internal/config"
@@ -24,6 +25,7 @@ type Server struct {
 	Config      *config.Config
 	Master      *client.Client
 	Aof         *aof.AOF
+	Channels    map[string]*channel.Channel
 }
 
 func (s *Server) HandleConnection(c *client.Client) {
@@ -40,6 +42,7 @@ func (s *Server) HandleConnection(c *client.Client) {
 		val, _ := util.RESPFormatter(raw)
 
 		arr, ok := val.([]interface{})
+
 		if !ok || len(arr) == 0 {
 			c.Write([]byte("-ERR invalid request\r\n"))
 			continue
@@ -51,7 +54,22 @@ func (s *Server) HandleConnection(c *client.Client) {
 			continue
 		}
 
-		resp, err := commands.Dispatch(c, arr, s.Store, s.Config, s.Replication)
+		if c.SubscribeMode {
+			switch cmdName {
+			case "SUBSCRIBE",
+				"PSUBSCRIBE",
+				"UNSUBSCRIBE",
+				"PUNSUBSCRIBE",
+				"PING",
+				"QUIT":
+
+			default:
+				c.Write([]byte("-ERR only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING / QUIT allowed in this context\r\n"))
+				continue
+			}
+		}
+
+		resp, err := commands.Dispatch(c, arr, s.Store, s.Config, s.Replication, s.Channels)
 
 		if err != nil {
 			c.Write([]byte(err.Error()))
@@ -81,7 +99,7 @@ func (s *Server) Start() {
 	if s.Aof != nil {
 		appendCommands := s.Aof.Restore()
 		for _, cmd := range appendCommands {
-			_, err := commands.Dispatch(c, cmd, s.Store, s.Config, s.Replication)
+			_, err := commands.Dispatch(c, cmd, s.Store, s.Config, s.Replication, s.Channels)
 			if err != nil {
 				panic(err)
 			}
@@ -217,5 +235,6 @@ func NewServer() *Server {
 		Aof:         aofhandler,
 		Config:      cfg,
 		Replication: replication,
+		Channels:    make(map[string]*channel.Channel),
 	}
 }

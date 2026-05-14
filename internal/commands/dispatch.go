@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jsndz/redish/internal/channel"
 	"github.com/jsndz/redish/internal/client"
 	"github.com/jsndz/redish/internal/commands/discard"
 	"github.com/jsndz/redish/internal/commands/echo"
@@ -14,6 +15,7 @@ import (
 	"github.com/jsndz/redish/internal/commands/lrange"
 	"github.com/jsndz/redish/internal/commands/multi"
 	"github.com/jsndz/redish/internal/commands/ping"
+	"github.com/jsndz/redish/internal/commands/pubsub"
 	replSub "github.com/jsndz/redish/internal/commands/repl"
 	"github.com/jsndz/redish/internal/commands/rpush"
 	"github.com/jsndz/redish/internal/commands/set"
@@ -24,7 +26,7 @@ import (
 	"github.com/jsndz/redish/internal/store"
 )
 
-type CommandHandler func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error)
+type CommandHandler func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error)
 
 var registry = make(map[string]CommandHandler)
 
@@ -33,55 +35,64 @@ func Register(name string, handler CommandHandler) {
 }
 
 func init() {
-	Register("PING", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
-		return ping.Execute(args, st)
+	Register("PING", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
+		return ping.Execute(c, args, st)
 	})
-	Register("ECHO", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("ECHO", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return echo.Execute(args, st)
 	})
-	Register("SET", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("SET", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return set.Execute(args, st)
 	})
-	Register("GET", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("GET", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return get.Execute(args, st)
 	})
-	Register("INCR", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("INCR", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return incr.Execute(args, st)
 	})
-	Register("RPUSH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("RPUSH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return rpush.Execute(args, st)
 	})
-	Register("LRANGE", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("LRANGE", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return lrange.Execute(args, st)
 	})
-	Register("MULTI", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("MULTI", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		c.InTx = true
 		return multi.Execute(args, st)
 	})
-	Register("EXEC", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
-		return exec.Execute(c, args, st, cfg, repl, Dispatch)
+	Register("EXEC", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
+		return exec.Execute(c, args, st, cfg, repl, channels, Dispatch)
 	})
-	Register("DISCARD", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("DISCARD", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return discard.Execute(c, args, st)
 	})
-	Register("WATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("WATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return watch.Execute(c, args, st)
 	})
-	Register("UNWATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("UNWATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return unwatch.Execute(c, args, st)
 	})
-	Register("CONFIG", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("CONFIG", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return getconfig.Execute(c, args, st, cfg)
 	})
-	Register("REPLCONF", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("REPLCONF", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return replSub.ExecuteReplConf(args, st, repl)
 	})
-	Register("PSYNC", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+	Register("PSYNC", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return replSub.ExecutePsync(c, args, st, repl)
+	})
+	Register("SUBSCRIBE", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
+		return pubsub.ExecuteSubscribe(c, args, st, repl, channels)
+	})
+	Register("UNSUBSCRIBE", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
+		return pubsub.ExecuteUnsubscribe(c, args, st, repl, channels)
+	})
+	Register("PUBLISH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
+		return pubsub.ExecutePublish(c, args, st, repl, channels)
 	})
 }
 
-func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config, replication *core.Replication) ([]byte, error) {
+func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config, replication *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 	cmdName, ok := arr[0].(string)
 	if !ok {
 		return nil, errors.New("-ERR invalid command\r\n")
@@ -101,7 +112,7 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.
 	}
 
 	if handler, ok := registry[cmd.Name]; ok {
-		return handler(c, cmd.Args, st, cfg, replication)
+		return handler(c, cmd.Args, st, cfg, replication, channels)
 	}
 
 	return nil, errors.New("-ERR unknown command\r\n")

@@ -1,8 +1,6 @@
 package core
 
-import (
-	"github.com/jsndz/redish/internal/client"
-)
+import "github.com/jsndz/redish/internal/client"
 
 type Replication struct {
 	Role       string
