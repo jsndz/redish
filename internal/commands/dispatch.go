@@ -14,17 +14,74 @@ import (
 	"github.com/jsndz/redish/internal/commands/lrange"
 	"github.com/jsndz/redish/internal/commands/multi"
 	"github.com/jsndz/redish/internal/commands/ping"
-	"github.com/jsndz/redish/internal/commands/repl"
+	replSub "github.com/jsndz/redish/internal/commands/repl"
 	"github.com/jsndz/redish/internal/commands/rpush"
 	"github.com/jsndz/redish/internal/commands/set"
 	"github.com/jsndz/redish/internal/commands/unwatch"
 	"github.com/jsndz/redish/internal/commands/watch"
 	"github.com/jsndz/redish/internal/config"
-	"github.com/jsndz/redish/internal/server"
+	"github.com/jsndz/redish/internal/core"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config, replication *server.Replication) ([]byte, error) {
+type CommandHandler func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error)
+
+var registry = make(map[string]CommandHandler)
+
+func Register(name string, handler CommandHandler) {
+	registry[strings.ToUpper(name)] = handler
+}
+
+func init() {
+	Register("PING", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return ping.Execute(args, st)
+	})
+	Register("ECHO", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return echo.Execute(args, st)
+	})
+	Register("SET", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return set.Execute(args, st)
+	})
+	Register("GET", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return get.Execute(args, st)
+	})
+	Register("INCR", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return incr.Execute(args, st)
+	})
+	Register("RPUSH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return rpush.Execute(args, st)
+	})
+	Register("LRANGE", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return lrange.Execute(args, st)
+	})
+	Register("MULTI", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		c.InTx = true
+		return multi.Execute(args, st)
+	})
+	Register("EXEC", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return exec.Execute(c, args, st, cfg, repl, Dispatch)
+	})
+	Register("DISCARD", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return discard.Execute(c, args, st)
+	})
+	Register("WATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return watch.Execute(c, args, st)
+	})
+	Register("UNWATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return unwatch.Execute(c, args, st)
+	})
+	Register("CONFIG", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return getconfig.Execute(c, args, st, cfg)
+	})
+	Register("REPLCONF", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return replSub.ExecuteReplConf(args, st, repl)
+	})
+	Register("PSYNC", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication) ([]byte, error) {
+		return replSub.ExecutePsync(c, args, st, repl)
+	})
+}
+
+func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.Config, replication *core.Replication) ([]byte, error) {
 	cmdName, ok := arr[0].(string)
 	if !ok {
 		return nil, errors.New("-ERR invalid command\r\n")
@@ -43,39 +100,9 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.
 		return []byte("+QUEUED\r\n"), nil
 	}
 
-	switch cmd.Name {
-	case "PING":
-		return ping.Execute(cmd.Args, st)
-	case "ECHO":
-		return echo.Execute(cmd.Args, st)
-	case "SET":
-		return set.Execute(cmd.Args, st)
-	case "GET":
-		return get.Execute(cmd.Args, st)
-	case "INCR":
-		return incr.Execute(cmd.Args, st)
-	case "RPUSH":
-		return rpush.Execute(cmd.Args, st)
-	case "LRANGE":
-		return lrange.Execute(cmd.Args, st)
-	case "MULTI":
-		c.InTx = true
-		return multi.Execute(cmd.Args, st)
-	case "EXEC":
-		return exec.Execute(c, cmd.Args, st, cfg, replication, Dispatch)
-	case "DISCARD":
-		return discard.Execute(c, cmd.Args, st)
-	case "WATCH":
-		return watch.Execute(c, cmd.Args, st)
-	case "UNWATCH":
-		return unwatch.Execute(c, cmd.Args, st)
-	case "CONFIG":
-		return getconfig.Execute(c, cmd.Args, st, cfg)
-	case "REPLCONF":
-		return repl.ExecuteReplConf(cmd.Args, st, replication)
-	case "PSYNC":
-		return repl.ExecutePsync(c, cmd.Args, st, replication)
-	default:
-		return nil, errors.New("-ERR unknown command\r\n")
+	if handler, ok := registry[cmd.Name]; ok {
+		return handler(c, cmd.Args, st, cfg, replication)
 	}
+
+	return nil, errors.New("-ERR unknown command\r\n")
 }

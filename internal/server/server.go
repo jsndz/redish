@@ -5,36 +5,108 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	"github.com/jsndz/redish/internal/aof"
 	"github.com/jsndz/redish/internal/client"
+	"github.com/jsndz/redish/internal/commands"
 	"github.com/jsndz/redish/internal/config"
+	"github.com/jsndz/redish/internal/core"
 	"github.com/jsndz/redish/internal/rdb"
 	"github.com/jsndz/redish/internal/store"
 	"github.com/jsndz/redish/util"
 )
 
-type Replication struct {
-	Role       string
-	ReplID     string
-	ReplOffset int64
-	Replicas   map[string]*client.Client
-}
-
-func (r *Replication) WriteToReplicas(raw []byte) {
-	for _, replica := range r.Replicas {
-		replica.Conn.Write(raw)
-	}
-	r.ReplOffset += int64(len(raw))
-}
-
 type Server struct {
 	Clients     map[string]*client.Client
-	Replication *Replication
+	Replication *core.Replication
 	Store       *store.Store
 	Config      *config.Config
 	Master      *client.Client
 	Aof         *aof.AOF
+}
+
+func (s *Server) HandleConnection(c *client.Client) {
+	buf := make([]byte, 4096)
+
+	for {
+		n, err := c.Conn.Read(buf)
+		if err != nil {
+			return
+		}
+
+		raw := string(buf[:n])
+
+		val, _ := util.RESPFormatter(raw)
+
+		arr, ok := val.([]interface{})
+		if !ok || len(arr) == 0 {
+			c.Write([]byte("-ERR invalid request\r\n"))
+			continue
+		}
+
+		cmdName, ok := arr[0].(string)
+		if !ok {
+			c.Write([]byte("-ERR invalid command\r\n"))
+			continue
+		}
+
+		resp, err := commands.Dispatch(c, arr, s.Store, s.Config, s.Replication)
+
+		if err != nil {
+			c.Write([]byte(err.Error()))
+			continue
+		}
+		if s.Replication.Role == "master" && s.Replication.Replicas != nil && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
+			s.Replication.WriteToReplicas(buf[:n])
+
+		}
+		if s.Aof != nil && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
+			s.Aof.Write(raw)
+		}
+
+		if !c.IsMasterConnection {
+			s.Replication.ReplOffset += int64(n)
+			c.Write(resp)
+		}
+	}
+}
+
+func (s *Server) Start() {
+	if s.Master != nil {
+		go s.HandleConnection(s.Master)
+	}
+	c := &client.Client{}
+
+	if s.Aof != nil {
+		appendCommands := s.Aof.Restore()
+		for _, cmd := range appendCommands {
+			_, err := commands.Dispatch(c, cmd, s.Store, s.Config, s.Replication)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	connectionUrl := fmt.Sprintf("0.0.0.0:%d", s.Config.Port)
+	l, err := net.Listen("tcp", connectionUrl)
+	if err != nil {
+		fmt.Println("Failed to bind to port ", err.Error())
+		return
+	}
+
+	defer l.Close()
+
+	for {
+		conn, err := l.Accept()
+
+		if err != nil {
+			fmt.Println("Failed to accept connection")
+			continue
+		}
+		c := client.New(conn)
+
+		go s.HandleConnection(c)
+	}
 }
 
 func NewServer() *Server {
@@ -132,7 +204,7 @@ func NewServer() *Server {
 		}
 
 	}
-	replication := &Replication{
+	replication := &core.Replication{
 		Replicas:   replicas,
 		Role:       role,
 		ReplID:     replId,

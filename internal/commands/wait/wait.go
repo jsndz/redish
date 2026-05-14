@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/jsndz/redish/internal/client"
-	"github.com/jsndz/redish/internal/server"
+	"github.com/jsndz/redish/internal/core"
 	"github.com/jsndz/redish/internal/store"
 	"github.com/jsndz/redish/util"
 )
 
-func Execute(c *client.Client, args []interface{}, st *store.Store, repl *server.Replication) ([]byte, error) {
+func Execute(c *client.Client, args []interface{}, st *store.Store, repl *core.Replication) ([]byte, error) {
 	if len(args) != 2 {
 		return nil, errors.New("-ERR invalid number of args")
 	}

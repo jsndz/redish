@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/jsndz/redish/internal/server"
+	"github.com/jsndz/redish/internal/core"
 	"github.com/jsndz/redish/internal/store"
 )
 
-func ExecuteReplConf(args []interface{}, st *store.Store, repl *server.Replication) ([]byte, error) {
+func ExecuteReplConf(args []interface{}, st *store.Store, repl *core.Replication) ([]byte, error) {
 	if len(args) != 2 {
 		return nil, errors.New("-ERR invalid number of args")
 	}
