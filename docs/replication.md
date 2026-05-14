@@ -34,3 +34,13 @@ for the first time slave wont know replId so it will send ? -1
 Server responds with FULLRSYNC replId offset
 
 FULLRESYNC means that the master cannot perform an incremental update to the replica, and will start a full resynchronization.
+
+so for every write command sent to the master, it will be sent to replica's 
+replica's wont send any response back if the command is from master which has a separate handler
+
+this might be seen as a asynchrous and less durable and less persistance
+since the replica may or may not be updates since the master does not wait for reply
+
+wait command is used to make this whole thing more durable
+after the command is writtern and use WAIT numOfReplicas timeout
+then the master waits for ack for min num of replicas for the timeout

@@ -48,12 +48,14 @@ func handler(c *client.Client, st *store.Store, cfg *config.Config, aofHandler *
 		}
 		if replication.Role == "master" && replication.Replicas != nil && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
 			replication.WriteToReplicas(buf[:n])
+
 		}
 		if aofHandler != nil && aof.IsWriteCommand(strings.ToUpper(cmdName)) {
 			aofHandler.Write(raw)
 		}
 
 		if !c.IsMasterConnection {
+			replication.ReplOffset += int64(n)
 			c.Write(resp)
 		}
 	}

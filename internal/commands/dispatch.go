@@ -72,7 +72,7 @@ func Dispatch(c *client.Client, arr []interface{}, st *store.Store, cfg *config.
 	case "CONFIG":
 		return getconfig.Execute(c, cmd.Args, st, cfg)
 	case "REPLCONF":
-		return repl.ExecuteReplConf(cmd.Args, st)
+		return repl.ExecuteReplConf(cmd.Args, st, replication)
 	case "PSYNC":
 		return repl.ExecutePsync(c, cmd.Args, st, replication)
 	default:
