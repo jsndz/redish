@@ -11,7 +11,7 @@ func Execute(c *client.Client, args []interface{}, _ *store.Store) ([]byte, erro
 	if len(args) != 0 {
 		return nil, errors.New("-ERR wrong number of arguments\r\n")
 	}
-	if c.SubscribeMode {
+	if c != nil && c.SubscribeMode {
 		return []byte("*2\r\n$4\r\npong\r\n$0\r\n\r\n"), nil
 	}
 	return []byte("+PONG\r\n"), nil

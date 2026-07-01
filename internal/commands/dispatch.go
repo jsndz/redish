@@ -20,6 +20,7 @@ import (
 	"github.com/jsndz/redish/internal/commands/rpush"
 	"github.com/jsndz/redish/internal/commands/set"
 	"github.com/jsndz/redish/internal/commands/unwatch"
+	"github.com/jsndz/redish/internal/commands/wait"
 	"github.com/jsndz/redish/internal/commands/watch"
 	"github.com/jsndz/redish/internal/config"
 	"github.com/jsndz/redish/internal/core"
@@ -71,6 +72,9 @@ func init() {
 	})
 	Register("UNWATCH", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return unwatch.Execute(c, args, st)
+	})
+	Register("WAIT", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
+		return wait.Execute(c, args, st, repl)
 	})
 	Register("CONFIG", func(c *client.Client, args []interface{}, st *store.Store, cfg *config.Config, repl *core.Replication, channels map[string]*channel.Channel) ([]byte, error) {
 		return getconfig.Execute(c, args, st, cfg)
